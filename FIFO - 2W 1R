@@ -1,0 +1,80 @@
+/*
+ * ---------------------------------------------------------------------------
+ * 
+ * Projeto: Escritor e leitor usando FIFO
+ * 
+ * Descrição:
+ * O código utiliza FIFO para realizar a comunicação entre duas threads - um leitor e dois escritores. 
+ * 
+ * 
+ * 
+ * Desenvolvedores:
+ * João Xavier
+ * Luan Cotini
+ * 
+ * Data de Criação: 29/11/2024
+ * 
+ * 
+ * ---------------------------------------------------------------------------
+ */
+
+#include <zephyr.h>
+#include <device.h>
+#include <devicetree.h>
+#include <drivers/gpio.h>
+#include <sys/printk.h>
+#include <sys/fifo.h>
+
+#define STACK_SIZE 1024
+#define PRIORITY 5
+
+K_FIFO_DEFINE(data_fifo);
+
+struct data_item_t {
+    void *fifo_reserved; /* 1st word reserved for use by fifo */
+    int data;
+};
+
+struct data_item_t tx_data1;
+struct data_item_t tx_data2;
+
+void writer1_thread(void)
+{
+    while (1) {
+        if (k_fifo_is_empty(&data_fifo)) {
+            tx_data1.data = k_uptime_get_32();
+            printk("Escrevendo dados (Writer 1): %d\n", tx_data1.data);
+            k_fifo_put(&data_fifo, &tx_data1);
+        }
+        k_sleep(K_SECONDS(1)); // Atraso de 1 segundo
+    }
+}
+
+void writer2_thread(void)
+{
+    while (1) {
+        if (k_fifo_is_empty(&data_fifo)) {
+            tx_data2.data = k_uptime_get_32();
+            printk("Escrevendo dados (Writer 2): %d\n", tx_data2.data);
+            k_fifo_put(&data_fifo, &tx_data2);
+        }
+        k_sleep(K_SECONDS(1)); // Atraso de 1 segundo
+    }
+}
+
+void reader_thread(void)
+{
+    struct data_item_t *rx_data;
+
+    while (1) {
+        rx_data = k_fifo_get(&data_fifo, K_FOREVER);
+        if (rx_data != NULL) {
+            printk("Lendo dados: %d\n", rx_data->data);
+        }
+        k_sleep(K_SECONDS(1)); // Atraso de 1 segundo
+    }
+}
+
+K_THREAD_DEFINE(writer1_tid, STACK_SIZE, writer1_thread, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(writer2_tid, STACK_SIZE, writer2_thread, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(reader_tid, STACK_SIZE, reader_thread, NULL, NULL, NULL, PRIORITY, 0, 0);
